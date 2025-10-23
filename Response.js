@@ -58,7 +58,7 @@ class Response {
   static updated(partnerOrderId) {
     return this.json({
       partnerOrderId: partnerOrderId,
-      status: 'updated'
+      status: 'pending'
     }, 200);
   }
 

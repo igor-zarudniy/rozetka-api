@@ -1,0 +1,25 @@
+{
+  "deliveryAddresType": "DropShipping",
+  "cashOnDelivery": 500,
+  "deliveryAddressId": "54321",
+  "deliveryCompanyName": "Укрпошта",
+  "CustomerName": "Петро Сидоренко",
+  "deliveryCity": "Львів",
+  "deliveryPhone": "+380671234567",
+  "deliveryStreet": "вул. Шевченка, буд. 25, кв. 5",
+  "products": [
+    {
+      "supplier_code": "SUP12345",
+      "RZ_code": "11254855",
+      "price": 100.5,
+      "quantity": 3
+    },
+    {
+      "supplier_code": "SUP99999",
+      "RZ_code": "11255000",
+      "price": 350.0,
+      "quantity": 1
+    }
+  ]
+}
+

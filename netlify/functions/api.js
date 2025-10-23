@@ -108,6 +108,8 @@ exports.handler = async (event, context) => {
         } else if (jsonData.error.includes('сервера')) {
           statusCode = 500;
         }
+      } else if (jsonData.status === 'pending') {
+        statusCode = 250;
       }
     } catch (e) {
       console.log('Response is not JSON or parsing failed');
