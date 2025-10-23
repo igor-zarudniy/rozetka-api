@@ -1,5 +1,4 @@
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwRHHq-0YUSZVNuGkv2hXm4Z0PW7nDXA92Td9V_d24yypnyazlSB4KqHssRot5MsR5X/exec';
-const API_KEY = 'doros_mh0oorv7_a87c23d6761c420990afabc9cc59d91f';
 
 exports.handler = async (event, context) => {
   const headers = {
@@ -13,13 +12,31 @@ exports.handler = async (event, context) => {
     return { statusCode: 200, headers, body: '' };
 
   try {
+    const authHeader = event.headers.authorization || event.headers.Authorization;
+    
+    if (!authHeader)
+      return {
+        statusCode: 401,
+        headers,
+        body: JSON.stringify({ error: 'Відсутній API-ключ' })
+      };
+    
+    const apiKey = authHeader.replace('Bearer ', '').trim();
+    
+    if (!apiKey)
+      return {
+        statusCode: 401,
+        headers,
+        body: JSON.stringify({ error: 'Невірний формат API-ключа' })
+      };
+    
     const method = event.httpMethod;
     let path = event.path;
     
     path = path.replace('/.netlify/functions/api', '');
     path = path.replace('/v1', '');
     
-    console.log(`Original path: ${event.path}, Cleaned path: ${path}, Method: ${method}`);
+    console.log(`Original path: ${event.path}, Cleaned path: ${path}, Method: ${method}, API Key: ${apiKey.substring(0, 10)}...`);
     
     let action = '';
     let guid = '';
@@ -50,7 +67,7 @@ exports.handler = async (event, context) => {
       };
     }
 
-    let appsScriptUrl = `${APPS_SCRIPT_URL}?action=${action}&apiKey=${API_KEY}`;
+    let appsScriptUrl = `${APPS_SCRIPT_URL}?action=${action}&apiKey=${apiKey}`;
     if (guid)
       appsScriptUrl += `&guid=${guid}`;
 
