@@ -89,5 +89,15 @@ class Response {
       message: 'Файл успішно завантажено'
     }, 200);
   }
+
+  /** Повертає відповідь при успішному видаленні файлу
+   * @returns {ContentService.TextOutput} - Об'єкт відповіді
+   */
+  static fileDeleted() {
+    return this.json({
+      success: true,
+      message: 'Файл успішно видалено'
+    }, 200);
+  }
 }
 

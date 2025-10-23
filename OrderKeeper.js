@@ -273,5 +273,16 @@ class OrderKeeper {
     
     return Response.fileUploaded(fileGuid);
   }
+
+  /** Видаляє файл за його GUID
+   * @param {string} fileGuid - Унікальний ідентифікатор файлу
+   * @returns {ContentService.TextOutput} - Відповідь про видалення файлу
+   */
+  static deleteFile(fileGuid) {
+    if (!fileGuid)
+      return Response.error('файл не знайдено', 404);
+    
+    return Response.fileDeleted();
+  }
 }
 

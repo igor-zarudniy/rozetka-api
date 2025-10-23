@@ -28,6 +28,9 @@ function doPost(e) {
     if (action === 'upload' && guid)
       return OrderKeeper.uploadFile(guid, requestData);
     
+    if (action === 'deleteFile' && guid)
+      return OrderKeeper.deleteFile(guid);
+    
     return Response.error('Невідома дія або відсутній GUID', 400);
     
   } catch (error) {
