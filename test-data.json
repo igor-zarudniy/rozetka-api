@@ -1,0 +1,30 @@
+{
+  "header": {
+    "comment": "Доставити після 18:00, подзвонити за годину",
+    "isFileRequired": true,
+    "partnerOrderId": "ROZ123456789",
+    "deliveryAddresType": "DropShipping",
+    "cashOnDelivery": 0,
+    "deliveryAddressId": "12345",
+    "deliveryCompanyName": "Нова Пошта",
+    "CustomerName": "Іван Петренко",
+    "deliveryCity": "Київ",
+    "deliveryPhone": "+380501234567",
+    "deliveryStreet": "вул. Хрещатик, буд. 1, кв. 10",
+    "products": [
+      {
+        "supplier_code": "SUP12345",
+        "RZ_code": "11254855",
+        "quantity": 2,
+        "price": 100.50
+      },
+      {
+        "supplier_code": "SUP67890",
+        "RZ_code": "11254800",
+        "quantity": 1,
+        "price": 250.00
+      }
+    ]
+  }
+}
+
