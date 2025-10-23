@@ -1,0 +1,13 @@
+{
+  "name": "rozetka-api-gateway",
+  "version": "1.0.0",
+  "description": "API Gateway для Rozetka інтеграції",
+  "scripts": {
+    "dev": "netlify dev",
+    "build": "echo 'No build required'"
+  },
+  "keywords": ["api", "rozetka", "netlify"],
+  "author": "Doros",
+  "license": "MIT"
+}
+
