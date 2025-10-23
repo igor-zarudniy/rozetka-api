@@ -14,12 +14,17 @@ exports.handler = async (event, context) => {
 
   try {
     const method = event.httpMethod;
-    const path = event.path.replace('/.netlify/functions/api', '');
+    let path = event.path;
+    
+    path = path.replace('/.netlify/functions/api', '');
+    path = path.replace('/v1', '');
+    
+    console.log(`Original path: ${event.path}, Cleaned path: ${path}, Method: ${method}`);
     
     let action = '';
     let guid = '';
 
-    if (path.startsWith('/order/create') || path === '/order/create') {
+    if (path === '/order/create' || path.startsWith('/order/create')) {
       action = 'create';
     } else if (path.match(/\/order\/cancel\/(.+)/)) {
       action = 'cancel';
@@ -37,7 +42,11 @@ exports.handler = async (event, context) => {
       return {
         statusCode: 404,
         headers,
-        body: JSON.stringify({ error: 'Ендпоінт не знайдено' })
+        body: JSON.stringify({ 
+          error: 'Ендпоінт не знайдено',
+          receivedPath: event.path,
+          cleanedPath: path
+        })
       };
     }
 
