@@ -63,6 +63,37 @@ class OrderKeeper {
     return processedItems;
   }
 
+  /** Перетворює масив товарів на об'єкт з колонками
+   * @param {Array} products - Масив товарів
+   * @returns {Object} - Об'єкт з колонками, значення об'єднані через \n
+   */
+  static transformProductsToColumns(products) {
+    if (!products || products.length === 0)
+      return {};
+    
+    const columns = {
+      supplier_code: [],
+      RZ_code: [],
+      quantity: [],
+      price: []
+    };
+    
+    for (let index = 0; index < products.length; index++) {
+      const product = products[index];
+      columns.supplier_code.push(product.supplier_code || '');
+      columns.RZ_code.push(product.RZ_code || '');
+      columns.quantity.push(product.quantity || '');
+      columns.price.push(product.price || '');
+    }
+    
+    return {
+      supplier_code: columns.supplier_code.join('\n'),
+      RZ_code: columns.RZ_code.join('\n'),
+      quantity: columns.quantity.join('\n'),
+      price: columns.price.join('\n')
+    };
+  }
+
   /** Розраховує резервовану ціну з націнкою 2%
    * @param {number} price - Базова ціна товару
    * @returns {number} - Резервована ціна
@@ -104,6 +135,7 @@ class OrderKeeper {
    */
   static saveOrder(guid, orderData, orderItems) {
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Orders');
+    const productsColumns = this.transformProductsToColumns(orderData.header.products);
     
     if (!sheet) {
       SpreadsheetApp.getActiveSpreadsheet().insertSheet('Orders');
@@ -119,6 +151,10 @@ class OrderKeeper {
         'Delivery Address ID',
         'Cash On Delivery',
         'Comment',
+        'Supplier Code',
+        'RZ Code',
+        'Quantity',
+        'Price',
         'Products JSON',
         'Status',
         'Created At'
@@ -137,6 +173,10 @@ class OrderKeeper {
       orderData.header.deliveryAddressId,
       orderData.header.cashOnDelivery,
       orderData.header.comment,
+      productsColumns.supplier_code,
+      productsColumns.RZ_code,
+      productsColumns.quantity,
+      productsColumns.price,
       JSON.stringify(orderItems),
       'created',
       new Date().toISOString()
@@ -168,9 +208,13 @@ class OrderKeeper {
           deliveryAddressId: data[index][7],
           cashOnDelivery: data[index][8],
           comment: data[index][9],
-          products: JSON.parse(data[index][10]),
-          status: data[index][11],
-          createdAt: data[index][12],
+          supplierCode: data[index][10],
+          rzCode: data[index][11],
+          quantity: data[index][12],
+          price: data[index][13],
+          products: JSON.parse(data[index][14]),
+          status: data[index][15],
+          createdAt: data[index][16],
           rowIndex: index
         };
       }
@@ -190,7 +234,7 @@ class OrderKeeper {
       return Response.error('Замовлення не знайдено', 404);
     
     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Orders');
-    sheet.getRange(order.rowIndex + 1, 12).setValue('canceled');
+    sheet.getRange(order.rowIndex + 1, 16).setValue('canceled');
     
     return Response.canceled(order.partnerOrderId);
   }
@@ -232,10 +276,16 @@ class OrderKeeper {
     
     if (updateData.products) {
       const orderItems = this.processOrderItems(updateData.products);
-      sheet.getRange(rowIndex, 11).setValue(JSON.stringify(orderItems));
+      const productsColumns = this.transformProductsToColumns(updateData.products);
+      
+      sheet.getRange(rowIndex, 11).setValue(productsColumns.supplier_code);
+      sheet.getRange(rowIndex, 12).setValue(productsColumns.RZ_code);
+      sheet.getRange(rowIndex, 13).setValue(productsColumns.quantity);
+      sheet.getRange(rowIndex, 14).setValue(productsColumns.price);
+      sheet.getRange(rowIndex, 15).setValue(JSON.stringify(orderItems));
     }
     
-    sheet.getRange(rowIndex, 12).setValue('updated');
+    sheet.getRange(rowIndex, 16).setValue('updated');
     
     return Response.updated(order.partnerOrderId);
   }
