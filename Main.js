@@ -15,13 +15,13 @@ function doPost(e) {
     const action = e.parameter.action;
     const guid = e.parameter.guid;
     
-    // Для завантаження файлів не парсимо JSON, а передаємо сирі дані
-    if (action === 'upload' && guid) {
-      return OrderKeeper.uploadFile(guid, e.postData);
-    }
-    
-    // Для всіх інших запитів парсимо JSON як зазвичай
+    // Парсимо JSON для всіх запитів (включно з файлами)
     const requestData = JSON.parse(e.postData.contents);
+    
+    // Для завантаження файлів передаємо decoded файл
+    if (action === 'upload' && guid) {
+      return OrderKeeper.uploadFile(guid, requestData);
+    }
     
     if (action === 'create')
       return OrderKeeper.createOrder(requestData);

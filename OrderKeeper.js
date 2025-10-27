@@ -155,28 +155,36 @@ class OrderKeeper {
 
   /** Завантажує файл для замовлення в Google Drive
    * @param {string} guid - Унікальний ідентифікатор замовлення
-   * @param {Object} postData - Об'єкт з даними файлу (e.postData)
+   * @param {Object} filePayload - Об'єкт з base64 даними файлу
    * @returns {ContentService.TextOutput} - JSON відповідь з file_guid або помилка 404*/
-  static uploadFile(guid, postData) {
+  static uploadFile(guid, filePayload) {
     // Перевіряємо чи існує замовлення з таким GUID
     const { sheetRange, sheetData } = InputKeeper.readSheetData(PROJECT_ID, 'Orders')
     const coordinates = InputKeeper.findHeaderCoordinates(sheetData, guid)
     if (!coordinates?.colIndex) return Response.error('Замовлення не знайдено', 404)
 
     try {
-      // Створюємо Blob з файлу
+      // Декодуємо base64 дані
+      if (!filePayload.fileData || !filePayload.isBase64) {
+        return Response.error('Невірний формат файлу', 400);
+      }
+
       const fileName = `order_${guid}_${DateManager.createCurrentDate()}`;
-      const fileBlob = Utilities.newBlob(
-        postData.contents,
-        postData.type || 'application/octet-stream',
-        fileName
-      );
+      const mimeType = filePayload.mimeType || 'application/octet-stream';
+      
+      // Декодуємо base64 string в binary дані
+      const binaryData = Utilities.base64Decode(filePayload.fileData);
+      
+      // Створюємо Blob з декодованих даних
+      const fileBlob = Utilities.newBlob(binaryData, mimeType, fileName);
+
+      Logger.log(`Створюємо файл: ${fileName}, MIME: ${mimeType}, Розмір blob: ${fileBlob.getBytes().length} байт`);
 
       // Зберігаємо файл у Google Drive використовуючи Drive API (працює в Web App)
       const fileMetadata = {
         name: fileName,
         parents: [FILES_FOLDER_ID],
-        mimeType: postData.type || 'application/octet-stream'
+        mimeType: mimeType
       };
 
       const file = Drive.Files.create(fileMetadata, fileBlob, {
@@ -203,6 +211,7 @@ class OrderKeeper {
 
     } catch (error) {
       Logger.log('Помилка при завантаженні файлу: ' + error.toString());
+      Logger.log('Stack trace: ' + error.stack);
       return Response.error('Помилка при завантаженні файлу: ' + error.message, 500);
     }
   }

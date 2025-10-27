@@ -85,18 +85,22 @@ exports.handler = async (event, context) => {
     if (action === 'upload' && event.body) {
       const contentType = event.headers['content-type'] || event.headers['Content-Type'] || 'application/octet-stream';
       
-      requestOptions.headers['Content-Type'] = contentType;
+      // Відправляємо як JSON з base64 данними (Apps Script це розуміє)
+      requestOptions.headers['Content-Type'] = 'application/json';
       
-      // Якщо дані прийшли як base64 (Netlify автоматично кодує binary)
-      if (event.isBase64Encoded) {
-        // Декодуємо base64 і передаємо як binary
-        const buffer = Buffer.from(event.body, 'base64');
-        requestOptions.body = buffer;
-      } else {
-        requestOptions.body = event.body;
-      }
+      // Netlify автоматично кодує binary в base64
+      const base64Data = event.isBase64Encoded ? event.body : Buffer.from(event.body).toString('base64');
       
-      console.log(`Uploading file with Content-Type: ${contentType}, Size: ${requestOptions.body.length} bytes`);
+      // Передаємо у форматі JSON
+      const payload = {
+        fileData: base64Data,
+        mimeType: contentType,
+        isBase64: true
+      };
+      
+      requestOptions.body = JSON.stringify(payload);
+      
+      console.log(`Uploading file with Content-Type: ${contentType}, Base64 size: ${base64Data.length} chars`);
     } 
     // Для звичайних JSON запитів
     else {
