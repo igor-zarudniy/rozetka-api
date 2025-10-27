@@ -9,11 +9,16 @@ function doPost(e) {
     if (!authResult.valid)
       return Response.error(authResult.error, authResult.code);
     
-    if (!e.postData || !e.postData.contents)
-      return Response.error('Відсутні дані запиту', 400);
-    
     const action = e.parameter.action;
     const guid = e.parameter.guid;
+    
+    // Для видалення файлу не потрібен body (DELETE запит)
+    if (action === 'deleteFile' && guid)
+      return OrderKeeper.deleteFile(guid);
+    
+    // Для всіх інших запитів потрібен body
+    if (!e.postData || !e.postData.contents)
+      return Response.error('Відсутні дані запиту', 400);
     
     // Парсимо JSON для всіх запитів (включно з файлами)
     const requestData = JSON.parse(e.postData.contents);
@@ -31,9 +36,6 @@ function doPost(e) {
     
     if (action === 'edit' && guid)
       return OrderKeeper.editOrder(guid, requestData);
-    
-    if (action === 'deleteFile' && guid)
-      return OrderKeeper.deleteFile(guid);
     
     return Response.error('Невідома дія або відсутній GUID', 400);
     

@@ -202,9 +202,11 @@ class OrderKeeper {
 
       // Якщо є колонка file_guid в таблиці, зберігаємо туди ID файлу
       if (headerMap.file_guid) {
-        const colIndex = headerMap.file_guid.colIndex
-        const rowIndex = coordinates.rowIndex
-        sheetRange.getRange(rowIndex + 1, colIndex + 1).setValue(fileGuid)
+        const colIndex = headerMap.file_guid.colIndex + 1
+        const fileIndex = headerMap.file_url.colIndex + 1
+        const rowIndex = coordinates.rowIndex + 1
+        sheetRange.getRange(rowIndex, colIndex).setValue(fileGuid)
+        sheetRange.getRange(rowIndex, fileIndex).setValue(`https://drive.google.com/file/d/${fileGuid}`)
       }
 
       return Response.fileUploaded(fileGuid);
@@ -213,6 +215,64 @@ class OrderKeeper {
       Logger.log('Помилка при завантаженні файлу: ' + error.toString());
       Logger.log('Stack trace: ' + error.stack);
       return Response.error('Помилка при завантаженні файлу: ' + error.message, 500);
+    }
+  }
+
+  /** Видаляє файл з Google Drive та очищує дані в таблиці
+   * @param {string} fileGuid - Унікальний ідентифікатор файлу в Google Drive
+   * @returns {ContentService.TextOutput} - JSON відповідь з підтвердженням видалення або помилка 404*/
+  static deleteFile(fileGuid) {
+    try {
+      // Перевіряємо чи існує файл в Google Drive
+      let fileExists = false;
+      try {
+        Drive.Files.get(fileGuid);
+        fileExists = true;
+      } catch (e) {
+        Logger.log('Файл не знайдено в Drive: ' + fileGuid);
+      }
+
+      // Видаляємо файл з Google Drive якщо він існує
+      if (fileExists) {
+        Drive.Files.remove(fileGuid);
+        Logger.log('Файл видалено з Drive: ' + fileGuid);
+      }
+
+      // Шукаємо файл в таблиці Orders за file_guid
+      const { sheetRange, sheetData } = InputKeeper.readSheetData(PROJECT_ID, 'Orders');
+      
+      // Знаходимо координати рядка з цим file_guid (так само як шукаємо замовлення)
+      const coordinates = InputKeeper.findHeaderCoordinates(sheetData, fileGuid);
+      
+      if (!coordinates?.colIndex) {
+        Logger.log('Рядок з file_guid не знайдено в таблиці');
+        return Response.fileDeleted(); // Все одно повертаємо success, файл з Drive видалено
+      }
+
+      // Отримуємо headerMap для очищення колонок
+      const localizer = InputKeeper.readSheetData(PROJECT_ID, '🌐Localizer').sheetData;
+      const headerMap = InputKeeper.createMapToStop(localizer, 'localizer', 'Orders');
+      InputKeeper.mapHeadersToCoordinates(sheetData, headerMap);
+
+      const rowIndex = coordinates.rowIndex;
+
+      // Очищаємо колонки file_guid та file_url
+      if (headerMap.file_guid) {
+        sheetRange.getRange(rowIndex + 1, headerMap.file_guid.colIndex + 1).clearContent();
+        Logger.log('Очищено file_guid в рядку ' + (rowIndex + 1));
+      }
+      
+      if (headerMap.file_url) {
+        sheetRange.getRange(rowIndex + 1, headerMap.file_url.colIndex + 1).clearContent();
+        Logger.log('Очищено file_url в рядку ' + (rowIndex + 1));
+      }
+
+      return Response.fileDeleted();
+
+    } catch (error) {
+      Logger.log('Помилка при видаленні файлу: ' + error.toString());
+      Logger.log('Stack trace: ' + error.stack);
+      return Response.error('Помилка при видаленні файлу: ' + error.message, 500);
     }
   }
 }
