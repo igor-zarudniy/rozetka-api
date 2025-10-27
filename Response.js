@@ -62,7 +62,19 @@ class Response {
     }, 200);
   }
 
-  /** Повертає статус замовлення
+  /** Повертає статус замовлення (250 - в процесі обробки)
+   * @param {string} partnerOrderId - ID замовлення партнера
+   * @param {string} status - Статус замовлення (created/updated)
+   * @returns {ContentService.TextOutput} - Об'єкт відповіді зі статусом 250
+   */
+  static orderStatusPending(partnerOrderId, status) {
+    return this.json({
+      partnerOrderId: partnerOrderId,
+      status: status
+    }, 250);
+  }
+
+  /** Повертає статус замовлення (200 - відвантажено)
    * @param {string} guid - Унікальний ідентифікатор замовлення
    * @param {string} status - Статус замовлення
    * @param {string} trackingNumber - Номер відстеження
