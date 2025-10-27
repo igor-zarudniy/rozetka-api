@@ -1,4 +1,5 @@
 const PROJECT_ID = '1n-OJR0yWGvLK-3GUePfQlj_LI7g1q4T5WeHUJy7P0yQ'
+const FILES_FOLDER_ID = '1Q8DqJGifnvGsa6DDJXBwBw4kfGmga4DO'
 
 class OrderKeeper {
   /** Створює нове замовлення
@@ -150,5 +151,59 @@ class OrderKeeper {
       sheetRange.getRange(rowIndex + 1, colIndex + 1).setValue(value)
     }
     return Response.updated(guid)
+  }
+
+  /** Завантажує файл для замовлення в Google Drive
+   * @param {string} guid - Унікальний ідентифікатор замовлення
+   * @param {Object} postData - Об'єкт з даними файлу (e.postData)
+   * @returns {ContentService.TextOutput} - JSON відповідь з file_guid або помилка 404*/
+  static uploadFile(guid, postData) {
+    // Перевіряємо чи існує замовлення з таким GUID
+    const { sheetRange, sheetData } = InputKeeper.readSheetData(PROJECT_ID, 'Orders')
+    const coordinates = InputKeeper.findHeaderCoordinates(sheetData, guid)
+    if (!coordinates?.colIndex) return Response.error('Замовлення не знайдено', 404)
+
+    try {
+      // Створюємо Blob з файлу
+      const fileName = `order_${guid}_${DateManager.createCurrentDate()}`;
+      const fileBlob = Utilities.newBlob(
+        postData.contents,
+        postData.type || 'application/octet-stream',
+        fileName
+      );
+
+      // Зберігаємо файл у Google Drive використовуючи Drive API (працює в Web App)
+      const fileMetadata = {
+        name: fileName,
+        parents: [FILES_FOLDER_ID],
+        mimeType: postData.type || 'application/octet-stream'
+      };
+
+      const file = Drive.Files.create(fileMetadata, fileBlob, {
+        fields: 'id,name,size,mimeType'
+      });
+
+      const fileGuid = file.id;
+
+      Logger.log(`Файл успішно завантажено: ${fileGuid}, розмір: ${file.size} байт, назва: ${file.name}`);
+
+      // Зберігаємо file_guid в таблицю Orders (якщо є така колонка)
+      const localizer = InputKeeper.readSheetData(PROJECT_ID, '🌐Localizer').sheetData
+      const headerMap = InputKeeper.createMapToStop(localizer, 'localizer', 'Orders')
+      InputKeeper.mapHeadersToCoordinates(sheetData, headerMap)
+
+      // Якщо є колонка file_guid в таблиці, зберігаємо туди ID файлу
+      if (headerMap.file_guid) {
+        const colIndex = headerMap.file_guid.colIndex
+        const rowIndex = coordinates.rowIndex
+        sheetRange.getRange(rowIndex + 1, colIndex + 1).setValue(fileGuid)
+      }
+
+      return Response.fileUploaded(fileGuid);
+
+    } catch (error) {
+      Logger.log('Помилка при завантаженні файлу: ' + error.toString());
+      return Response.error('Помилка при завантаженні файлу: ' + error.message, 500);
+    }
   }
 }

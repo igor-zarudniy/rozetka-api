@@ -12,9 +12,16 @@ function doPost(e) {
     if (!e.postData || !e.postData.contents)
       return Response.error('Відсутні дані запиту', 400);
     
-    const requestData = JSON.parse(e.postData.contents);
     const action = e.parameter.action;
     const guid = e.parameter.guid;
+    
+    // Для завантаження файлів не парсимо JSON, а передаємо сирі дані
+    if (action === 'upload' && guid) {
+      return OrderKeeper.uploadFile(guid, e.postData);
+    }
+    
+    // Для всіх інших запитів парсимо JSON як зазвичай
+    const requestData = JSON.parse(e.postData.contents);
     
     if (action === 'create')
       return OrderKeeper.createOrder(requestData);
@@ -24,9 +31,6 @@ function doPost(e) {
     
     if (action === 'edit' && guid)
       return OrderKeeper.editOrder(guid, requestData);
-    
-    if (action === 'upload' && guid)
-      return OrderKeeper.uploadFile(guid, requestData);
     
     if (action === 'deleteFile' && guid)
       return OrderKeeper.deleteFile(guid);

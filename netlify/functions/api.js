@@ -78,13 +78,33 @@ exports.handler = async (event, context) => {
     
     const requestOptions = {
       method: appsScriptMethod,
-      headers: {
-        'Content-Type': 'application/json'
-      }
+      headers: {}
     };
 
-    if (event.body && appsScriptMethod === 'POST')
-      requestOptions.body = event.body;
+    // Для завантаження файлів обробляємо binary дані
+    if (action === 'upload' && event.body) {
+      const contentType = event.headers['content-type'] || event.headers['Content-Type'] || 'application/octet-stream';
+      
+      requestOptions.headers['Content-Type'] = contentType;
+      
+      // Якщо дані прийшли як base64 (Netlify автоматично кодує binary)
+      if (event.isBase64Encoded) {
+        // Декодуємо base64 і передаємо як binary
+        const buffer = Buffer.from(event.body, 'base64');
+        requestOptions.body = buffer;
+      } else {
+        requestOptions.body = event.body;
+      }
+      
+      console.log(`Uploading file with Content-Type: ${contentType}, Size: ${requestOptions.body.length} bytes`);
+    } 
+    // Для звичайних JSON запитів
+    else {
+      requestOptions.headers['Content-Type'] = 'application/json';
+      
+      if (event.body && appsScriptMethod === 'POST')
+        requestOptions.body = event.body;
+    }
 
     console.log(`Forwarding ${method} ${path} -> ${appsScriptUrl}`);
     
