@@ -42,6 +42,12 @@ function doPost(e) {
   } catch (error) {
     Logger.log('Помилка в doPost: ' + error.toString());
     Logger.log('Stack trace: ' + error.stack);
+    
+    // Сповіщаємо в Telegram про помилку
+    const action = e.parameter.action || 'unknown';
+    const guid = e.parameter.guid || '';
+    TelegramManager.notifyError(action, error.message, guid);
+    
     return Response.error('Загальні помилки сервера: ' + error.message, 500);
   }
 }

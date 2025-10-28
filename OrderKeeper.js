@@ -12,6 +12,10 @@ class OrderKeeper {
 
     const guid = this.saveOrderToSheet(orderData);
     const orderItems = this.processOrderItems(orderData.header.products);
+    
+    // Сповіщаємо в Telegram про створення замовлення
+    TelegramManager.notifyOrderCreated(orderData.header.partnerOrderId, orderData.header.products);
+    
     return Response.created(guid, orderItems);
   }
 
@@ -122,7 +126,16 @@ class OrderKeeper {
     const localizer = InputKeeper.readSheetData(PROJECT_ID, '🌐Localizer').sheetData
     const headerMap = InputKeeper.createMapToStop(localizer, 'localizer', 'Orders')
     InputKeeper.mapHeadersToCoordinates(sheetData, headerMap)
-    sheetRange.getRange(coordinates.rowIndex + 1, headerMap.status.colIndex + 1).setValue('canceled')
+    
+    // Отримуємо partnerOrderId перед скасуванням
+    const rowIndex = coordinates.rowIndex
+    const partnerOrderId = sheetData[rowIndex][headerMap.partnerOrderId.colIndex]
+    
+    sheetRange.getRange(rowIndex + 1, headerMap.status.colIndex + 1).setValue('canceled')
+    
+    // Сповіщаємо в Telegram про скасування
+    TelegramManager.notifyOrderCanceled(partnerOrderId)
+    
     return Response.canceled(guid)
   }
 
@@ -151,6 +164,10 @@ class OrderKeeper {
 
       sheetRange.getRange(rowIndex + 1, colIndex + 1).setValue(value)
     }
+    
+    // Сповіщаємо в Telegram про редагування замовлення
+    TelegramManager.notifyOrderEdited(requestData.partnerOrderId, requestData.products)
+    
     return Response.updated(guid)
   }
 
@@ -194,13 +211,19 @@ class OrderKeeper {
       const headerMap = InputKeeper.createMapToStop(localizer, 'localizer', 'Orders')
       InputKeeper.mapHeadersToCoordinates(sheetData, headerMap)
 
+      // Отримуємо partnerOrderId для сповіщення
+      const rowIndex = coordinates.rowIndex
+      const partnerOrderId = sheetData[rowIndex][headerMap.partnerOrderId.colIndex]
+
       if (headerMap.file_guid) {
         const colIndex = headerMap.file_guid.colIndex + 1
         const fileIndex = headerMap.file_url.colIndex + 1
-        const rowIndex = coordinates.rowIndex + 1
-        sheetRange.getRange(rowIndex, colIndex).setValue(fileGuid)
-        sheetRange.getRange(rowIndex, fileIndex).setValue(`https://drive.google.com/file/d/${fileGuid}`)
+        sheetRange.getRange(rowIndex + 1, colIndex).setValue(fileGuid)
+        sheetRange.getRange(rowIndex + 1, fileIndex).setValue(`https://drive.google.com/file/d/${fileGuid}`)
       }
+
+      // Сповіщаємо в Telegram про завантаження файлу
+      TelegramManager.notifyFileUploaded(partnerOrderId, fileGuid)
 
       return Response.fileUploaded(fileGuid);
 
@@ -252,6 +275,9 @@ class OrderKeeper {
         sheetRange.getRange(rowIndex + 1, headerMap.file_url.colIndex + 1).clearContent();
         Logger.log('Очищено file_url в рядку ' + (rowIndex + 1));
       }
+
+      // Сповіщаємо в Telegram про видалення файлу
+      TelegramManager.notifyFileDeleted(fileGuid)
 
       return Response.fileDeleted();
 

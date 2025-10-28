@@ -125,10 +125,10 @@ exports.handler = async (event, context) => {
       if (jsonData.error) {
         if (jsonData.error.includes('API-ключ') || jsonData.error.includes('авторизації')) {
           statusCode = 401;
+        } else if (jsonData.error.includes('не знайдено')) {
+          statusCode = 400;
         } else if (jsonData.error.includes('Недійсні') || jsonData.error.includes('параметри') || jsonData.error.includes('дані')) {
           statusCode = 400;
-        } else if (jsonData.error.includes('не знайдено')) {
-          statusCode = 404;
         } else if (jsonData.error.includes('сервера')) {
           statusCode = 500;
         }
