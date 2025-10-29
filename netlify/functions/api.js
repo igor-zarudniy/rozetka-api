@@ -55,9 +55,10 @@ exports.handler = async (event, context) => {
     } else if (path.match(/\/order\/(.+)\/upload/)) {
       action = 'upload';
       guid = path.match(/\/order\/(.+)\/upload/)[1];
-    } else if (path.match(/\/file\/(.+)\/delete/)) {
+    } else if (path.match(/\/file\/(.+)\/delete/) || (method === 'DELETE' && path.match(/\/file\/(.+)/))) {
       action = 'deleteFile';
-      guid = path.match(/\/file\/(.+)\/delete/)[1];
+      const match = path.match(/\/file\/(.+)\/delete/) || path.match(/\/file\/(.+)/);
+      guid = match[1];
     } else {
       return {
         statusCode: 404,

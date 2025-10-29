@@ -5,6 +5,7 @@ class Response {
    * @returns {ContentService.TextOutput} - Об'єкт відповіді
    */
   static json(data, statusCode = 200) {
+    console.warn({data})
     return ContentService
       .createTextOutput(JSON.stringify(data))
       .setMimeType(ContentService.MimeType.JSON);

@@ -1,5 +1,41 @@
 const PROJECT_ID = '1n-OJR0yWGvLK-3GUePfQlj_LI7g1q4T5WeHUJy7P0yQ'
 const FILES_FOLDER_ID = '1Q8DqJGifnvGsa6DDJXBwBw4kfGmga4DO'
+const MAIN_SHEET = '🛒 Замовлення'
+
+function testCreateOrders() {
+  const requestData = {
+    "header": {
+      "comment": "Доставити після 18:00, подзвонити за годину",
+      "isFileRequired": true,
+      "partnerOrderId": "ROZ123456789",
+      "deliveryAddresType": "DropShipping",
+      "cashOnDelivery": 0,
+      "deliveryAddressId": "12345",
+      "deliveryCompanyName": "Нова Пошта",
+      "CustomerName": "Іван Петренко",
+      "deliveryCity": "Київ",
+      "deliveryPhone": "+380501234567",
+      "deliveryStreet": "вул. Хрещатик, буд. 1, кв. 10",
+      "products": [
+        {
+          "supplier_code": "SUP12345",
+          "RZ_code": "11254855",
+          "quantity": 2,
+          "price": 100.50
+        },
+        {
+          "supplier_code": "SUP67890",
+          "RZ_code": "11254800",
+          "quantity": 1,
+          "price": 250.00
+        }
+      ]
+    }
+  }
+
+  console.log(OrderKeeper.deleteFile('1hR4PweHB71vUNO5i0Nw9IuX8lvEALS1f'))
+}
+
 
 class OrderKeeper {
   /** Створює нове замовлення
@@ -10,12 +46,24 @@ class OrderKeeper {
     if (!validation.valid)
       return Response.error(validation.error, 400);
 
-    const guid = this.saveOrderToSheet(orderData);
+    // Спочатку обробляємо товари та отримуємо reservedQuantity
     const orderItems = this.processOrderItems(orderData.header.products);
     
-    // Сповіщаємо в Telegram про створення замовлення
-    TelegramManager.notifyOrderCreated(orderData.header.partnerOrderId, orderData.header.products);
+    // Створюємо products з order_quantity (запитано) та quantity (зарезервовано)
+    const productsWithReserved = orderItems.map(item => ({
+      supplier_code: item.supplier_code,
+      RZ_code: item.RZ_code,
+      order_quantity: item.quantity,        // Скільки Розетка запитала
+      quantity: item.reservedQuantity,      // Скільки ми зарезервували
+      price: item.price
+    }));
     
+    // Зберігаємо замовлення з обома значеннями кількості
+    orderData.header.products = productsWithReserved;
+    const guid = this.saveOrderToSheet(orderData);
+    
+    // Сповіщаємо в Telegram про створення замовлення
+    TelegramManager.notifyOrderCreated(orderData.header.partnerOrderId, orderItems);
     return Response.created(guid, orderItems);
   }
 
@@ -45,6 +93,7 @@ class OrderKeeper {
    * @returns {Object} - Об'єкт замовлення з розгорнутими полями products (значення через \n)*/
   static flattenOrder(orderData, status = 'created', uuid) {
     let guid = !uuid ? Utilities.getUuid() : uuid;
+    console.warn({ guid })
     let products = orderData.products
     let productKeys = Object.keys(products[0]);
     let preparedOrder = {};
@@ -54,7 +103,8 @@ class OrderKeeper {
       const values = [];
 
       for (let productIndex = 0; productIndex < products.length; productIndex++) {
-        values.push(products[productIndex][key] || '');
+        const value = products[productIndex][key];
+        values.push(value !== undefined && value !== null ? value : '');
       }
 
       preparedOrder[key] = values.join('\n');
@@ -73,8 +123,8 @@ class OrderKeeper {
   static saveOrderToSheet(orderData) {
     const localizer = InputKeeper.readSheetData(PROJECT_ID, '🌐Localizer').sheetData
     const preparedOrder = this.flattenOrder(orderData.header)
-    const headerMap = InputKeeper.createMapToStop(localizer, 'localizer', 'Orders')
-    const { sheetRange, sheetData } = InputKeeper.readSheetData(PROJECT_ID, 'Orders')
+    const headerMap = InputKeeper.createMapToStop(localizer, 'localizer', MAIN_SHEET)
+    const { sheetRange, sheetData } = InputKeeper.readSheetData(PROJECT_ID, MAIN_SHEET)
     InputKeeper.mapHeadersToCoordinates(sheetData, headerMap)
     sheetRange.insertRowBefore(2)
     const array = [];
@@ -82,22 +132,32 @@ class OrderKeeper {
     for (let key in headerMap) {
       const elIndex = headerMap[key].colIndex;
       const value = preparedOrder[key];
-      if(value) continue
+      if (value === undefined || value === null || value === '') continue
       array[elIndex] = value;
     }
     sheetRange.getRange(2, 1, 1, array.length).setValues([array])
-    return orderData.guid
+    return preparedOrder.guid
   }
 
-  /** Обробляє список товарів замовлення
+  /** Обробляє список товарів замовлення з перевіркою залишків на складі
    * @param {Array} products - Масив товарів
-   * @returns {Array} - Масив оброблених товарів
+   * @returns {Array} - Масив оброблених товарів з реальними reservedQuantity
    */
   static processOrderItems(products) {
     const processedItems = [];
+    const stocks = StockKeeper.trackStocks();
 
     for (let index = 0; index < products.length; index++) {
       const product = products[index];
+      
+      // Отримуємо доступну кількість на складі
+      const availableStock = stocks[product.supplier_code] || 0;
+      
+      // Резервуємо тільки те що є на складі (але не більше ніж запитано)
+      const reservedQuantity = Math.min(product.quantity, availableStock);
+      
+      // Якщо зарезервована кількість співпадає з запитаною - true, інакше - false
+      const result = reservedQuantity === product.quantity;
 
       const item = {
         supplier_code: product.supplier_code,
@@ -105,8 +165,8 @@ class OrderKeeper {
         price: product.price,
         quantity: product.quantity,
         reservedPrice: product.price,
-        reservedQuantity: product.quantity,
-        result: true
+        reservedQuantity: reservedQuantity,
+        result: result
       };
 
       processedItems.push(item);
@@ -119,23 +179,21 @@ class OrderKeeper {
    * @param {string} guid - Унікальний ідентифікатор замовлення
    * @returns {ContentService.TextOutput} - Відповідь про скасування замовлення*/
   static cancelOrder(guid) {
-    const { sheetRange, sheetData } = InputKeeper.readSheetData(PROJECT_ID, 'Orders')
+    const { sheetRange, sheetData } = InputKeeper.readSheetData(PROJECT_ID, MAIN_SHEET)
     const coordinates = InputKeeper.findHeaderCoordinates(sheetData, guid)
-    if (!coordinates?.colIndex) return Response.error('Замовлення не знайдено', 404)
+    if (!coordinates?.colIndex) return Response.error('Замовлення не знайдено', 400)
 
     const localizer = InputKeeper.readSheetData(PROJECT_ID, '🌐Localizer').sheetData
-    const headerMap = InputKeeper.createMapToStop(localizer, 'localizer', 'Orders')
+    const headerMap = InputKeeper.createMapToStop(localizer, 'localizer', MAIN_SHEET)
     InputKeeper.mapHeadersToCoordinates(sheetData, headerMap)
-    
-    // Отримуємо partnerOrderId перед скасуванням
+
     const rowIndex = coordinates.rowIndex
     const partnerOrderId = sheetData[rowIndex][headerMap.partnerOrderId.colIndex]
-    
+
     sheetRange.getRange(rowIndex + 1, headerMap.status.colIndex + 1).setValue('canceled')
-    
-    // Сповіщаємо в Telegram про скасування
+
     TelegramManager.notifyOrderCanceled(partnerOrderId)
-    
+
     return Response.canceled(guid)
   }
 
@@ -145,13 +203,27 @@ class OrderKeeper {
    * @param {Object} requestData - Об'єкт з даними для оновлення
    * @returns {ContentService.TextOutput} - JSON відповідь з підтвердженням оновлення або помилка 404*/
   static editOrder(guid, requestData) {
-    const { sheetRange, sheetData } = InputKeeper.readSheetData(PROJECT_ID, 'Orders')
+    const { sheetRange, sheetData } = InputKeeper.readSheetData(PROJECT_ID, MAIN_SHEET)
     const coordinates = InputKeeper.findHeaderCoordinates(sheetData, guid)
     if (!coordinates?.colIndex) return Response.error('Замовлення не знайдено', 404)
 
-    const preparedOrder = this.flattenOrder(requestData, 'pending', guid)
+    // Обробляємо товари та перевіряємо залишки (як при створенні)
+    const orderItems = this.processOrderItems(requestData.products)
+    
+    // Створюємо products з order_quantity (запитано) та quantity (зарезервовано)
+    const productsWithReserved = orderItems.map(item => ({
+      supplier_code: item.supplier_code,
+      RZ_code: item.RZ_code,
+      order_quantity: item.quantity,        // Скільки Розетка запитала
+      quantity: item.reservedQuantity,      // Скільки ми зарезервували
+      price: item.price
+    }))
+    
+    requestData.products = productsWithReserved
+    const preparedOrder = this.flattenOrder(requestData, 'created', guid)
+    
     const localizer = InputKeeper.readSheetData(PROJECT_ID, '🌐Localizer').sheetData
-    const headerMap = InputKeeper.createMapToStop(localizer, 'localizer', 'Orders')
+    const headerMap = InputKeeper.createMapToStop(localizer, 'localizer', MAIN_SHEET)
     InputKeeper.mapHeadersToCoordinates(sheetData, headerMap)
 
     for (let key in headerMap) {
@@ -160,15 +232,16 @@ class OrderKeeper {
       const rowIndex = coordinates.rowIndex
       const value = preparedOrder[key]
       const currentValue = sheetData[rowIndex][colIndex]
-      if (!value || value === currentValue) continue
+      if (value === undefined || value === null || value === '') continue
+      if (value === currentValue) continue
 
       sheetRange.getRange(rowIndex + 1, colIndex + 1).setValue(value)
     }
     
-    // Сповіщаємо в Telegram про редагування замовлення
-    TelegramManager.notifyOrderEdited(requestData.partnerOrderId, requestData.products)
-    
-    return Response.updated(guid)
+    const orderId = sheetData[coordinates.rowIndex][headerMap.partnerOrderId.colIndex]
+    TelegramManager.notifyOrderEdited(orderId, orderItems)
+
+    return Response.created(guid, orderItems)
   }
 
   /** Завантажує файл для замовлення в Google Drive
@@ -176,7 +249,7 @@ class OrderKeeper {
    * @param {Object} filePayload - Об'єкт з base64 даними файлу
    * @returns {ContentService.TextOutput} - JSON відповідь з file_guid або помилка 404*/
   static uploadFile(guid, filePayload) {
-    const { sheetRange, sheetData } = InputKeeper.readSheetData(PROJECT_ID, 'Orders')
+    const { sheetRange, sheetData } = InputKeeper.readSheetData(PROJECT_ID, MAIN_SHEET)
     const coordinates = InputKeeper.findHeaderCoordinates(sheetData, guid)
     if (!coordinates?.colIndex) return Response.error('Замовлення не знайдено', 404)
 
@@ -191,7 +264,7 @@ class OrderKeeper {
 
       const fileBlob = Utilities.newBlob(binaryData, mimeType, fileName);
 
-      Logger.log(`Створюємо файл: ${fileName}, MIME: ${mimeType}, Розмір blob: ${fileBlob.getBytes().length} байт`);
+      console.log(`Створюємо файл: ${fileName}, MIME: ${mimeType}, Розмір blob: ${fileBlob.getBytes().length} байт`);
 
       const fileMetadata = {
         name: fileName,
@@ -205,13 +278,12 @@ class OrderKeeper {
 
       const fileGuid = file.id;
 
-      Logger.log(`Файл успішно завантажено: ${fileGuid}, розмір: ${file.size} байт, назва: ${file.name}`);
+      console.log(`Файл успішно завантажено: ${fileGuid}, розмір: ${file.size} байт, назва: ${file.name}`);
 
       const localizer = InputKeeper.readSheetData(PROJECT_ID, '🌐Localizer').sheetData
-      const headerMap = InputKeeper.createMapToStop(localizer, 'localizer', 'Orders')
+      const headerMap = InputKeeper.createMapToStop(localizer, 'localizer', MAIN_SHEET)
       InputKeeper.mapHeadersToCoordinates(sheetData, headerMap)
 
-      // Отримуємо partnerOrderId для сповіщення
       const rowIndex = coordinates.rowIndex
       const partnerOrderId = sheetData[rowIndex][headerMap.partnerOrderId.colIndex]
 
@@ -222,14 +294,14 @@ class OrderKeeper {
         sheetRange.getRange(rowIndex + 1, fileIndex).setValue(`https://drive.google.com/file/d/${fileGuid}`)
       }
 
-      // Сповіщаємо в Telegram про завантаження файлу
+
       TelegramManager.notifyFileUploaded(partnerOrderId, fileGuid)
 
       return Response.fileUploaded(fileGuid);
 
     } catch (error) {
-      Logger.log('Помилка при завантаженні файлу: ' + error.toString());
-      Logger.log('Stack trace: ' + error.stack);
+      console.log('Помилка при завантаженні файлу: ' + error.toString());
+      console.log('Stack trace: ' + error.stack);
       return Response.error('Помилка при завантаженні файлу: ' + error.message, 500);
     }
   }
@@ -239,52 +311,28 @@ class OrderKeeper {
    * @returns {ContentService.TextOutput} - JSON відповідь з підтвердженням видалення або помилка 404*/
   static deleteFile(fileGuid) {
     try {
-      let fileExists = false;
-      try {
-        Drive.Files.get(fileGuid);
-        fileExists = true;
-      } catch (e) {
-        Logger.log('Файл не знайдено в Drive: ' + fileGuid);
-      }
-
-      if (fileExists) {
-        Drive.Files.remove(fileGuid);
-        Logger.log('Файл видалено з Drive: ' + fileGuid);
-      }
-
-      const { sheetRange, sheetData } = InputKeeper.readSheetData(PROJECT_ID, 'Orders');
+      Drive.Files.remove(fileGuid)
+      const { sheetRange, sheetData } = InputKeeper.readSheetData(PROJECT_ID, MAIN_SHEET);
       const coordinates = InputKeeper.findHeaderCoordinates(sheetData, fileGuid);
-
-      if (!coordinates?.colIndex) {
-        Logger.log('Рядок з file_guid не знайдено в таблиці');
-        return Response.fileDeleted();
-      }
-
       const localizer = InputKeeper.readSheetData(PROJECT_ID, '🌐Localizer').sheetData;
-      const headerMap = InputKeeper.createMapToStop(localizer, 'localizer', 'Orders');
+      const headerMap = InputKeeper.createMapToStop(localizer, 'localizer', MAIN_SHEET);
       InputKeeper.mapHeadersToCoordinates(sheetData, headerMap);
+      console.warn()
+      const rowIndex = coordinates?.rowIndex;
 
-      const rowIndex = coordinates.rowIndex;
-
-      if (headerMap.file_guid) {
+      if (rowIndex) {
         sheetRange.getRange(rowIndex + 1, headerMap.file_guid.colIndex + 1).clearContent();
-        Logger.log('Очищено file_guid в рядку ' + (rowIndex + 1));
-      }
-
-      if (headerMap.file_url) {
         sheetRange.getRange(rowIndex + 1, headerMap.file_url.colIndex + 1).clearContent();
-        Logger.log('Очищено file_url в рядку ' + (rowIndex + 1));
       }
 
-      // Сповіщаємо в Telegram про видалення файлу
       TelegramManager.notifyFileDeleted(fileGuid)
 
       return Response.fileDeleted();
 
     } catch (error) {
-      Logger.log('Помилка при видаленні файлу: ' + error.toString());
-      Logger.log('Stack trace: ' + error.stack);
-      return Response.error('Помилка при видаленні файлу: ' + error.message, 500);
+      console.log('Помилка при видаленні файлу: ' + error.toString());
+      console.log('Stack trace: ' + error.stack);
+      return Response.error('Замовлення не знайдено', 404);
     }
   }
 
@@ -292,47 +340,38 @@ class OrderKeeper {
    * @param {string} guid - Унікальний ідентифікатор замовлення
    * @returns {ContentService.TextOutput} - JSON відповідь зі статусом замовлення або помилка 404*/
   static getOrderStatus(guid) {
-    const { sheetData } = InputKeeper.readSheetData(PROJECT_ID, 'Orders');
+    const { sheetData } = InputKeeper.readSheetData(PROJECT_ID, MAIN_SHEET);
     const localizer = InputKeeper.readSheetData(PROJECT_ID, '🌐Localizer').sheetData;
-    const headerMap = InputKeeper.createMapToStop(localizer, 'localizer', 'Orders');
+    const headerMap = InputKeeper.createMapToStop(localizer, 'localizer', MAIN_SHEET);
     InputKeeper.mapHeadersToCoordinates(sheetData, headerMap);
     const coordinates = InputKeeper.findHeaderCoordinates(sheetData, guid);
-    
+    console.warn({ coordinates })
     if (!coordinates?.colIndex) {
       return Response.error('Замовлення не знайдено', 404);
     }
 
     const rowIndex = coordinates.rowIndex;
-    
-    // Збираємо всі дані з рядка
     const orderData = {};
     for (let key in headerMap) {
       const colIndex = headerMap[key].colIndex;
       orderData[key] = sheetData[rowIndex][colIndex];
     }
 
-    // Розбиваємо дані товарів (вони зберігаються через \n)
     const supplierCodes = (orderData.supplier_code || '').toString().split('\n');
     const rzCodes = (orderData.RZ_code || '').toString().split('\n');
     const quantities = (orderData.quantity || '').toString().split('\n');
-    const prices = (orderData.price || '').toString().split('\n');
-    
-    // Розбиваємо серійні номери (вони зберігаються через кому для всіх товарів)
     const allSerialNumbers = (orderData.SerialNumber || '').toString()
       .split(',')
       .map(sn => sn.trim())
       .filter(sn => sn.length > 0);
 
-    // Формуємо масив products
     const products = [];
-    let serialNumberIndex = 0; // Індекс для розподілу серійних номерів
+    let serialNumberIndex = 0; 
 
     for (let i = 0; i < supplierCodes.length; i++) {
-      if (!supplierCodes[i]) continue; // Пропускаємо порожні
+      if (!supplierCodes[i]) continue;
 
       const quantity = parseInt(quantities[i]) || 0;
-      
-      // Беремо серійні номери для цього товару згідно quantity
       const productSerialNumbers = [];
       for (let j = 0; j < quantity; j++) {
         if (serialNumberIndex < allSerialNumbers.length) {
@@ -350,15 +389,11 @@ class OrderKeeper {
       });
     }
 
-    // Визначаємо який статус повертати
     const status = orderData.status || 'created';
-    
-    // Якщо замовлення в процесі обробки (created/updated) → 250 OK
     if (status === 'created' || status === 'updated') {
-      return Response.orderStatusPending(orderData.partnerOrderId, status);
+      return Response.orderStatusPending(guid, status);
     }
-    
-    // Якщо замовлення відвантажено (shipped) → 200 OK з повними даними
+
     if (status === 'shipped') {
       return Response.orderStatus(
         guid,
@@ -367,8 +402,7 @@ class OrderKeeper {
         products
       );
     }
-    
-    // Для інших статусів (якщо є) повертаємо 250 за замовчуванням
-    return Response.orderStatusPending(orderData.partnerOrderId, status);
+
+    return Response.orderStatusPending(guid, status);
   }
 }

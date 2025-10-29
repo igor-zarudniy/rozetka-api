@@ -3,8 +3,7 @@ const TELEGRAM_CHAT_ID = '-4851269062';
 
 class TelegramManager {
   /** Відправляє повідомлення в Telegram групу
-   * @param {string} message - Текст повідомлення
-   */
+   * @param {string} message - Текст повідомлення*/
   static sendMessage(message) {
     try {
       const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
@@ -23,21 +22,21 @@ class TelegramManager {
 
       UrlFetchApp.fetch(url, options);
     } catch (error) {
-      Logger.log('Помилка відправки в Telegram: ' + error.toString());
+      console.log('Помилка відправки в Telegram: ' + error.toString());
     }
   }
 
   /** Сповіщення про створення замовлення
    * @param {string} partnerOrderId - Номер замовлення
-   * @param {Array} products - Масив товарів
-   */
-  static notifyOrderCreated(partnerOrderId, products) {
+   * @param {Array} orderItems - Масив оброблених товарів з reservedQuantity*/
+  static notifyOrderCreated(partnerOrderId, orderItems) {
     let message = `🆕 <b>Розетка створила замовлення</b>\n\n`;
     message += `📋 <b>Номер замовлення:</b> ${partnerOrderId}\n\n`;
     message += `📦 <b>Перелік товарів:</b>\n`;
 
-    products.forEach((product, index) => {
-      message += `${index + 1}. ${product.supplier_code} — ${product.quantity} шт.\n`;
+    orderItems.forEach((item, index) => {
+      const status = item.reservedQuantity === item.quantity ? '✅' : '⚠️';
+      message += `${index + 1}. ${item.RZ_code} — ${item.quantity} шт. (заброньовано ${item.reservedQuantity} шт.) ${status}\n`;
     });
 
     this.sendMessage(message);
@@ -45,23 +44,22 @@ class TelegramManager {
 
   /** Сповіщення про редагування замовлення
    * @param {string} partnerOrderId - Номер замовлення
-   * @param {Array} products - Новий масив товарів
-   */
-  static notifyOrderEdited(partnerOrderId, products) {
+   * @param {Array} orderItems - Масив оброблених товарів з reservedQuantity*/
+  static notifyOrderEdited(partnerOrderId, orderItems) {
     let message = `✏️ <b>Розетка змінює замовлення</b>\n\n`;
     message += `📋 <b>Номер замовлення:</b> ${partnerOrderId}\n\n`;
     message += `📦 <b>Новий перелік товарів:</b>\n`;
 
-    products.forEach((product, index) => {
-      message += `${index + 1}. ${product.supplier_code} — ${product.quantity} шт.\n`;
+    orderItems.forEach((item, index) => {
+      const status = item.reservedQuantity === item.quantity ? '✅' : '⚠️';
+      message += `${index + 1}. ${item.RZ_code} — ${item.quantity} шт. (заброньовано ${item.reservedQuantity} шт.) ${status}\n`;
     });
 
     this.sendMessage(message);
   }
 
   /** Сповіщення про скасування замовлення
-   * @param {string} partnerOrderId - Номер замовлення
-   */
+   * @param {string} partnerOrderId - Номер замовлення*/
   static notifyOrderCanceled(partnerOrderId) {
     const message = `❌ <b>Розетка видалила замовлення</b>\n\n` +
                    `📋 <b>Номер замовлення:</b> ${partnerOrderId}`;
@@ -71,8 +69,7 @@ class TelegramManager {
 
   /** Сповіщення про завантаження файлу
    * @param {string} partnerOrderId - Номер замовлення
-   * @param {string} fileGuid - ID файлу в Google Drive
-   */
+   * @param {string} fileGuid - ID файлу в Google Drive*/
   static notifyFileUploaded(partnerOrderId, fileGuid) {
     const fileUrl = `https://drive.google.com/file/d/${fileGuid}/view`;
     const message = `📄 <b>Розетка відправила документ</b>\n\n` +
@@ -83,8 +80,7 @@ class TelegramManager {
   }
 
   /** Сповіщення про видалення файлу
-   * @param {string} fileGuid - ID файлу
-   */
+   * @param {string} fileGuid - ID файлу*/
   static notifyFileDeleted(fileGuid) {
     const message = `🗑️ <b>Розетка видалила документ</b>\n\n` +
                    `📁 <b>ID документа:</b> ${fileGuid}`;
@@ -95,8 +91,7 @@ class TelegramManager {
   /** Сповіщення про помилку
    * @param {string} action - Дія в якій сталася помилка
    * @param {string} errorMessage - Текст помилки
-   * @param {string} guid - GUID (якщо є)
-   */
+   * @param {string} guid - GUID (якщо є)*/
   static notifyError(action, errorMessage, guid = '') {
     let message = `⚠️ <b>Тільки що сталась помилка!</b>\n\n`;
     message += `🔧 <b>Дія:</b> ${action}\n`;
