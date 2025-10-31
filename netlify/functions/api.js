@@ -133,7 +133,16 @@ exports.handler = async (event, context) => {
         } else if (jsonData.error.includes('сервера')) {
           statusCode = 500;
         }
-      } else if (jsonData.status === 'created' || jsonData.status === 'updated') {
+      } else if (jsonData.status === 'created') {
+        // Для команди створення замовлення даємо 200
+        if (action === 'create') {
+          statusCode = 200;
+        } 
+        // Для запиту статусу даємо 250
+        else if (action === 'status') {
+          statusCode = 250;
+        }
+      } else if (jsonData.status === 'updated') {
         statusCode = 250;
       }
     } catch (e) {
