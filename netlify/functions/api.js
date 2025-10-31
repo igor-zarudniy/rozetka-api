@@ -140,10 +140,10 @@ exports.handler = async (event, context) => {
         } 
         // Для запиту статусу даємо 250
         else if (action === 'status') {
-          statusCode = 250;
+          statusCode = 200;
         }
       } else if (jsonData.status === 'updated') {
-        statusCode = 250;
+        statusCode = 200;
       }
     } catch (e) {
       console.log('Response is not JSON or parsing failed');
