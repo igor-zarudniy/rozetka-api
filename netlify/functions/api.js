@@ -136,7 +136,7 @@ exports.handler = async (event, context) => {
       } else if (jsonData.status === 'created'){
         statusCode = 200;
       }
-      elese  if(jsonData.status === 'updated') {
+      else  if(jsonData.status === 'updated') {
         statusCode = 250;
       }
     } catch (e) {
